@@ -68,7 +68,7 @@ function setup() {
 }
 
 function draw() {
-  background(128, 128, 128);
+  background(135, 135, 145);
 
   // effects to the buffer
   applyCRTEffects(crtBuffer);
@@ -92,6 +92,11 @@ function draw() {
   // drawing hands
   for (let landmarks of handResults) {
     drawHand(crtBuffer, landmarks);
+    if (landmarks && landmarks.length > 0) {
+      checkFingertipAndPlaySound(landmarks);
+    } else {
+      console.warn("no landmarks detected");
+    }
   }
 
   crtBuffer.pop();
@@ -352,4 +357,85 @@ function chromaticAberration() {
   image(crtBuffer, 3, 2, width, height);
 
   noTint();
+}
+
+////////// audio logic
+// initialize
+const synth = new Tone.Synth().toDestination();
+
+//notes relative to position
+function mapFingertipToSound(fingertip) {
+  const { x, y } = fingertip;
+
+  // Map x to frequency
+  const frequency = map(x, 0, windowWidth, 220, 880); // A3 to A5
+  console.log(`Mapped Frequency: ${frequency}`);
+
+  // Map y to volume
+  const volume = map(y, 0, windowHeight, -12, 0); // -12dB to 0dB
+  console.log(`Mapped Volume: ${volume}`);
+
+  synth.volume.value = volume;
+  return Tone.Frequency(frequency).toNote(); // convert frequency to note
+  const note = mapFingertipToSound({ x, y });
+  console.log(`Generated Note: ${note}`);
+  if (!isNaN(note)) {
+    synth.triggerAttackRelease(note, "8n");
+  }
+}
+
+let lastPlayedNote = null; // track the last played note
+let lastFingerPosition = { x: null, y: null }; // track fingertip position
+
+// coordinates
+function checkFingertipAndPlaySound(landmarks) {
+  const indexFingertip = landmarks[8]; // Index finger tip
+
+  if (landmarks[8]) {
+    const x = landmarks[8].x * windowWidth; // scale normalized x to screen width
+    const y = landmarks[8].y * windowHeight; // scale normalized y to screen height
+    console.log(`Fingertip Position: x=${x}, y=${y}`);
+
+    const note = mapFingertipToSound({ x, y });
+    console.log(`Note to Play: ${note}`);
+
+    if (note && note !== lastPlayedNote) {
+      console.log(`Playing Note: ${note}`);
+      synth.triggerAttackRelease(note, "8n");
+      lastPlayedNote = note;
+    }
+  } else {
+    console.warn("Index fingertip not found.");
+  }
+
+  if (indexFingertip && indexFingertip.x != null && indexFingertip.y != null) {
+    const x = indexFingertip.x;
+    const y = indexFingertip.y;
+
+    // logic for distance and repeats
+    const distance = dist(
+      x,
+      y,
+      lastFingerPosition.x || 0,
+      lastFingerPosition.y || 0
+    );
+    if (distance > 10) {
+      // threshold to avoid re-triggering at similar positions
+      const note = mapFingertipToSound({ x, y });
+
+      console.log(`Generated Note: ${note}, Distance Moved: ${distance}`);
+
+      // only play if it's a new note
+      if (note !== lastPlayedNote) {
+        synth.triggerAttackRelease(note, "8n"); // play the note
+        console.log(`Playing Note: ${note}`);
+        lastPlayedNote = note; // update last note
+      }
+
+      // update the last known finger position
+      lastFingerPosition = { x, y };
+    }
+  } else {
+    console.warn("Index fingertip not found or invalid.");
+  }
 }
