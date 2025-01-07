@@ -117,6 +117,7 @@ function draw() {
     drawHand(crtBuffer, landmarks);
     if (landmarks && landmarks.length > 0) {
       playChord(handResults); // play the chord based on hand position
+      playNote(handResults);
     } else {
       console.warn("No landmarks detected");
     }
@@ -459,6 +460,7 @@ function chromaticAberration() {
 ////////// audio logic
 // initialize
 const polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+const monoSynth = new Tone.MonoSynth(Tone.Synth).toDestination();
 
 // chords for c major scale
 const chords = [
@@ -471,6 +473,8 @@ const chords = [
   ["B4", "D5", "F5", "A5"], // Bmin7(b5)
   ["C5", "E5", "G5", "B5"], // Cmaj7 up an octave
 ];
+
+const notes = ["C", "D", "E", "F", "G", "A", "B", "C"];
 
 const numZones = chords.length; // number of zones
 let isChordPlaying = false; // ...is it playing?
@@ -588,6 +592,63 @@ function playChord(handResults) {
           polySynth.releaseAll(); // stop chord
           lastPlayedChord = null; // reset lastPlayedChord
           lastZoneIndex = -1; // reset zone
+        }
+      }
+    }
+  }
+}
+
+function playNote(handResults) {
+  if (handResults.length === 0) return; // exit if no hands are detected
+
+  // loop through detected hands
+  for (let handIndex = 0; handIndex < handResults.length; handIndex++) {
+    const landmarks = handResults[handIndex]; // get landmarks for this hand
+
+    if (!landmarks || landmarks.length < 9) return; // skip if landmarks are missing
+
+    const indexFingertip = landmarks[8]; // index finger
+    const thumbTip = landmarks[4]; // thumb
+
+    if (indexFingertip && thumbTip) {
+      const fingerX = indexFingertip.x; // X coordinate (normalized [0, 1])
+      const fingerY = indexFingertip.y; // Y coordinate (normalized [0, 1])
+      const thumbX = thumbTip.x; // thumb X coordinate
+      const thumbY = thumbTip.y; // thumb Y coordinate
+
+      const distance = dist(
+        fingerX * width,
+        fingerY * height,
+        thumbX * width,
+        thumbY * height
+      );
+
+      const strumThreshold = 0.05 * width; // min dist to trigger sound
+      const maxDistance = 0.2 * width; // max dist for volume scaling
+      const mappedVolume = map(
+        distance,
+        strumThreshold,
+        maxDistance,
+        -60,
+        0,
+        true
+      );
+
+      // check if this hand is on the left side
+      if (fingerX < 0.5) {
+        // reverse the note order: map closer to the center to lower notes
+        const noteIndex = Math.floor(
+          map(fingerX * width, width / 2, 0, 0, notes.length) // flip mapping
+        );
+        const octave = Math.floor(map(fingerY * height, height, 0, 3, 5)); // map Y to octaves
+        const note = `${notes[noteIndex % notes.length]}${octave}`; // construct notes
+
+        if (distance > strumThreshold) {
+          monoSynth.volume.value = mappedVolume; // set vol
+          monoSynth.triggerAttack(note, "8n"); // play note
+          console.log(`Left Hand Note: ${note}`);
+        } else {
+          monoSynth.triggerRelease(); // stop the note when below threshold
         }
       }
     }
