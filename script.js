@@ -8,13 +8,36 @@ let wiggleOffset = 0;
 let scanlineOffset = 0;
 let staticPopFrames = 0;
 
-function setup() {
-  createCanvas(800, 600);
+// window variables
+let leftZoneWidth, rightZoneWidth;
+let borderMargin = 50; // distance from edges
 
-  // Initialize webcam feed
+function setup() {
+  let aspectRatio = 16 / 9;
+  let width = windowWidth;
+  let height = windowWidth / aspectRatio;
+
+  if (height > windowHeight) {
+    height = windowHeight;
+    width = height * aspectRatio;
+  }
+
+  leftBoundary = width * 0.05;
+  rightBoundary = width * 0.95;
+  topBoundary = height * 0.05;
+  bottomBoundary = height * 0.95;
+
+  createCanvas(width, height);
+
+  // initialize webcam feed
   video = createCapture(VIDEO);
-  video.size(640, 480);
+  video.size(width, height);
   video.hide();
+
+  zoneWidth = width / 2 / numZones; // divide the left half into equal zone
+
+  leftZoneWidth = width / 2; // left side of the canvas
+  rightZoneWidth = width / 2; // right side of the canvas
 
   // buffer for effects
   crtBuffer = createGraphics(640, 480);
@@ -89,17 +112,21 @@ function draw() {
     drawFace(crtBuffer, landmarks);
   }
 
-  // drawing hands
+  //drawing hands
   for (let landmarks of handResults) {
     drawHand(crtBuffer, landmarks);
     if (landmarks && landmarks.length > 0) {
-      checkFingertipAndPlaySound(landmarks);
+      playChord(handResults); // play the chord based on hand position
     } else {
-      console.warn("no landmarks detected");
+      console.warn("No landmarks detected");
     }
   }
 
   crtBuffer.pop();
+
+  // ************************* border drawing for testing *************************
+  drawBorder(crtBuffer);
+  drawZoneBorders(crtBuffer, numZones);
 
   // draw to the main canvas
   push();
@@ -122,6 +149,76 @@ function draw() {
   wiggleOffset += 0.1;
   scanlineOffset += 6;
   if (scanlineOffset > height) scanlineOffset = 0;
+}
+
+// draw borders
+function drawBorder(crtBuffer) {
+  const leftBoundary = crtBuffer.width * 0.05; // 10% from the left edge
+  const rightBoundary = crtBuffer.width * 0.95; // 10% from the right edge
+  const topBoundary = crtBuffer.height * 0.05; // 10% from the top edge
+  const bottomBoundary = crtBuffer.height * 0.95; // 10% from the bottom edge
+  const middleX = crtBuffer.width / 2; // Middle of the canvas (x-axis)
+
+  // left border
+  crtBuffer.stroke(255, 0, 0); // Red border
+  crtBuffer.strokeWeight(2);
+  crtBuffer.noFill();
+  crtBuffer.line(leftBoundary, 0, leftBoundary, crtBuffer.height);
+
+  // right border
+  crtBuffer.line(rightBoundary, 0, rightBoundary, crtBuffer.height);
+
+  // top border
+  crtBuffer.line(0, topBoundary, crtBuffer.width, topBoundary);
+
+  // bottom border
+  crtBuffer.line(0, bottomBoundary, crtBuffer.width, bottomBoundary);
+
+  // middle line
+  crtBuffer.stroke(0, 255, 0); // Green line for the middle (optional color change)
+  crtBuffer.line(middleX, 0, middleX, crtBuffer.height);
+}
+
+// draw zones
+
+function drawZoneBorders(crtBuffer, numZones) {
+  // boundaries
+  const leftBoundary = crtBuffer.width * 0.05;
+  const rightBoundary = crtBuffer.width * 0.95;
+  const topBoundary = crtBuffer.height * 0.05;
+  const bottomBoundary = crtBuffer.height * 0.95;
+
+  // calculate zone widths for left and right
+  const leftZoneWidth = (rightBoundary - leftBoundary) / 2 / numZones;
+  const rightZoneStart = leftBoundary + (rightBoundary - leftBoundary) / 2;
+
+  // border style
+  crtBuffer.stroke(0, 0, 255); // Blue lines for zones
+  crtBuffer.strokeWeight(2);
+
+  // left zones
+  for (let i = 0; i <= numZones; i++) {
+    const x = leftBoundary + i * leftZoneWidth;
+    crtBuffer.line(x, topBoundary, x, bottomBoundary); // Vertical line for each left zone
+  }
+
+  // right zones
+  for (let i = 0; i <= numZones; i++) {
+    const x = rightZoneStart + i * leftZoneWidth;
+    crtBuffer.line(x, topBoundary, x, bottomBoundary); // Vertical line for each right zone
+  }
+
+  // labels
+  crtBuffer.fill(255);
+  crtBuffer.noStroke();
+  crtBuffer.textSize(16);
+  for (let i = 0; i < numZones; i++) {
+    const leftLabelX = leftBoundary + i * leftZoneWidth + leftZoneWidth / 2;
+    const rightLabelX = rightZoneStart + i * leftZoneWidth + leftZoneWidth / 2;
+
+    crtBuffer.text(`L${i + 1}`, leftLabelX, topBoundary - 10); // Left zone labels
+    crtBuffer.text(`R${i + 1}`, rightLabelX, topBoundary - 10); // Right zone labels
+  }
 }
 
 function drawHand(buffer, landmarks) {
@@ -167,7 +264,7 @@ function drawFace(buffer, landmarks) {
     pt.z * buffer.width, // Keep Z scaling consistent
   ]);
 
-  // triangle mapping logic for face using delaunay***************
+  // ************************* triangle mapping logic for face using delaunay ***************
 
   //   const filteredPoints = points.filter(
   //     (pt) => pt[0] >= 0 && pt[0] <= width && pt[1] >= 0 && pt[1] <= height
@@ -361,81 +458,138 @@ function chromaticAberration() {
 
 ////////// audio logic
 // initialize
-const synth = new Tone.Synth().toDestination();
+const polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
 
-//notes relative to position
-function mapFingertipToSound(fingertip) {
-  const { x, y } = fingertip;
+// chords for c major scale
+const chords = [
+  ["C4", "E4", "G4", "B4"], // Cmaj7
+  ["D4", "F4", "A4", "C5"], // Dmin7
+  ["E4", "G4", "B4", "D5"], // Emin7
+  ["F4", "A4", "C5", "E5"], // Fmaj7
+  ["G4", "B4", "D5", "F5"], // G7
+  ["A4", "C5", "E5", "G5"], // Amin7
+  ["B4", "D5", "F5", "A5"], // Bmin7(b5)
+  ["C5", "E5", "G5", "B5"], // Cmaj7 up an octave
+];
 
-  // Map x to frequency
-  const frequency = map(x, 0, windowWidth, 220, 880); // A3 to A5
-  console.log(`Mapped Frequency: ${frequency}`);
+const numZones = chords.length; // number of zones
+let isChordPlaying = false; // ...is it playing?
+let lastPlayedChord = null; // last played chord
 
-  // Map y to volume
-  const volume = map(y, 0, windowHeight, -12, 0); // -12dB to 0dB
-  console.log(`Mapped Volume: ${volume}`);
+// function to check if finger tip is out of bounds
+function isOutOfBounds(landmarks) {
+  const handX = landmarks[8].x * width; // index
+  const handY = landmarks[8].y * height;
 
-  synth.volume.value = volume;
-  return Tone.Frequency(frequency).toNote(); // convert frequency to note
-  const note = mapFingertipToSound({ x, y });
-  console.log(`Generated Note: ${note}`);
-  if (!isNaN(note)) {
-    synth.triggerAttackRelease(note, "8n");
+  // defined boundary zones
+  const leftBoundary = width * 0.05;
+  const rightBoundary = width * 0.95;
+  const topBoundary = height * 0.05;
+  const bottomBoundary = height * 0.95;
+
+  // check if the hand is out of bounds (left, right, top, or bottom)
+  if (
+    handX < leftBoundary || // left boundary
+    handX > rightBoundary || // right boundary
+    handY < topBoundary || // top boundary
+    handY > bottomBoundary // bottom boundary
+  ) {
+    return true; // hand is out of bounds
   }
+  return false; // hand is in bounds
 }
 
-let lastPlayedNote = null; // track the last played note
-let lastFingerPosition = { x: null, y: null }; // track fingertip position
+let lastZoneIndex = -1; // track the last zone the finger was in
+let lastStrumDistance = 0; // track the last distance of strum
+let isPlaying = false; // keep track of whether the chord is already being played
 
-// coordinates
-function checkFingertipAndPlaySound(landmarks) {
-  const indexFingertip = landmarks[8]; // Index finger tip
+function playChord(handResults) {
+  if (handResults.length > 0) {
+    const landmarks = handResults[0]; // single hand detection for now
+    const indexFingertip = landmarks[8]; // index finger coordinate
+    const thumbTip = landmarks[4]; // thumb coordinate
 
-  if (landmarks[8]) {
-    const x = landmarks[8].x * windowWidth; // scale normalized x to screen width
-    const y = landmarks[8].y * windowHeight; // scale normalized y to screen height
-    console.log(`Fingertip Position: x=${x}, y=${y}`);
+    if (indexFingertip && thumbTip) {
+      const fingerX = indexFingertip.x; // finger X normalized to [0, 1]
+      const fingerY = indexFingertip.y; // finger Y normalized to [0, 1]
 
-    const note = mapFingertipToSound({ x, y });
-    console.log(`Note to Play: ${note}`);
+      const thumbX = thumbTip.x; // thumb X normalized to [0, 1]
+      const thumbY = thumbTip.y; // thumb Y normalized to [0, 1]
 
-    if (note && note !== lastPlayedNote) {
-      console.log(`Playing Note: ${note}`);
-      synth.triggerAttackRelease(note, "8n");
-      lastPlayedNote = note;
-    }
-  } else {
-    console.warn("Index fingertip not found.");
-  }
+      // calculate the distance between index finger and thumb
+      const distance = dist(
+        fingerX * width,
+        fingerY * height,
+        thumbX * width,
+        thumbY * height
+      );
 
-  if (indexFingertip && indexFingertip.x != null && indexFingertip.y != null) {
-    const x = indexFingertip.x;
-    const y = indexFingertip.y;
+      const strumThreshold = 0.05 * width; // min. pixel distance for playing a note
+      const maxDistance = 0.2 * width; // max. distance for full volume
 
-    // logic for distance and repeats
-    const distance = dist(
-      x,
-      y,
-      lastFingerPosition.x || 0,
-      lastFingerPosition.y || 0
-    );
-    if (distance > 10) {
-      // threshold to avoid re-triggering at similar positions
-      const note = mapFingertipToSound({ x, y });
+      // map distance to volume (distance = 0 -> mute, distance = large -> loud)
+      const mappedVolume = map(
+        distance,
+        strumThreshold,
+        maxDistance,
+        -60,
+        0,
+        true
+      );
+      polySynth.volume.value = mappedVolume;
 
-      console.log(`Generated Note: ${note}, Distance Moved: ${distance}`);
+      // distance threshold check
+      if (distance > strumThreshold) {
+        // zone index for right side
+        const zoneIndex = Math.floor(
+          map(
+            fingerX * width, // finger's absolute X position
+            width / 2, // start from the middle of the canvas (right half)
+            rightBoundary, // end at the right boundary
+            0,
+            numZones // map to the number of zones
+          )
+        );
 
-      // only play if it's a new note
-      if (note !== lastPlayedNote) {
-        synth.triggerAttackRelease(note, "8n"); // play the note
-        console.log(`Playing Note: ${note}`);
-        lastPlayedNote = note; // update last note
+        // if the zone has changed, release the previous chord and play the new one
+        if (zoneIndex !== lastZoneIndex) {
+          if (lastZoneIndex !== -1) {
+            polySynth.releaseAll(); // stop previous chord
+          }
+          lastZoneIndex = zoneIndex; // update the last zone index
+
+          // map the Y-position of the index finger to an octave range
+          const fingerOctave = Math.floor(
+            map(fingerY * height, height, 0, 0, 2) // invert the mapping: higher Y -> higher octaves
+          );
+
+          // get the chord for the current zone
+          if (zoneIndex >= 0 && zoneIndex < numZones) {
+            let chord = chords[zoneIndex]; // get the chord for the current zone
+
+            // adjust the chord notes based on the octave determined by the Y-position
+            chord = chord.map((note) => {
+              const baseNote = note.substring(0, note.length - 1);
+              const baseOctave = parseInt(note[note.length - 1]);
+              const newNote = `${baseNote}${baseOctave + fingerOctave}`;
+              return newNote;
+            });
+
+            // if the current chord is different from the last one, play the new chord
+            if (chord !== lastPlayedChord) {
+              polySynth.triggerAttack(chord); // play new chord
+              lastPlayedChord = chord; // update the last played chord
+            }
+          }
+        }
+      } else {
+        // if strum distance is below the threshold, release the current chord
+        if (lastPlayedChord) {
+          polySynth.releaseAll(); // stop chord
+          lastPlayedChord = null; // reset lastPlayedChord
+          lastZoneIndex = -1; // reset zone
+        }
       }
-
-      // update the last known finger position
-      lastFingerPosition = { x, y };
     }
-  } else {
-    console.warn("Index fingertip not found or invalid.");
   }
 }
