@@ -662,7 +662,7 @@ function playChord(landmarks, orientation) {
 let arpeggioPattern = new Tone.Pattern(
   function (time, note) {
     // trigger note at the given time
-    synthLeft.triggerAttackRelease(note, "64n", time); //
+    synthLeft.triggerAttackRelease(note, "16n", time); //
   },
   [], // empty array of notes to be updated dynamically
   "upDown" // arpeggio direction
@@ -675,6 +675,7 @@ function startArpeggiator(chord) {
 
   // start the arpeggio
   arpeggioPattern.start(0); // starts the Pattern at the first beat
+  arpeggioPattern.interval = "16n";
 
   // tone.js Transport is running
   if (Tone.Transport.state !== "started") {
