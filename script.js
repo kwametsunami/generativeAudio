@@ -52,9 +52,12 @@ function setup() {
   hands.setOptions({
     maxNumHands: 2,
     modelComplexity: 1,
-    minDetectionConfidence: 0.8,
+    minDetectionConfidence: 0.85,
     minTrackingConfidence: 0.8,
   });
+
+  let lastHandDetectedTime = Date.now(); // timestamp for when hands were last detected
+  const HAND_DETECTION_TIMEOUT = 1500; // second and a half timeout
 
   // handle hand results
   hands.onResults((results) => {
@@ -72,10 +75,21 @@ function setup() {
         if (handedness === "Left") {
           //////// BIG FYI!!!! okay this is confusing but since the image is mirrored the hands are switched
           handData.right = { landmarks, handedness };
+          console.log(handData.right);
         } else if (handedness === "Right") {
           handData.left = { landmarks, handedness };
         }
       }
+
+      // update the last hand detected time if any hand is present
+      if (handData.left || handData.right) {
+        lastHandDetectedTime = Date.now();
+      }
+    }
+
+    // check if 1.5 seconds have passed without detecting any hands
+    if (Date.now() - lastHandDetectedTime > HAND_DETECTION_TIMEOUT) {
+      noteClear(); // trigger note clearing
     }
   });
 
@@ -111,8 +125,8 @@ function setup() {
 
 // store handedness and landmarks for both hands
 let handData = {
-  left: null, // { landmarks: [...], handedness: 'Left' }
-  right: null, // { landmarks: [...], handedness: 'Right' }
+  left: null,
+  right: null,
 };
 
 // lil check to see palm orientation
@@ -163,14 +177,14 @@ function draw() {
     let orientation = isPalmFacingCamera(handData.right.landmarks, "right");
     // right hand
     drawHand(crtBuffer, handData.right.landmarks, "blue");
-    // playNote(handData.right.landmarks, orientation); // play notes with the right hand
+    playNote(handData.right.landmarks, orientation); // play notes with the right hand
   }
 
   crtBuffer.pop();
 
   // ************************* border drawing for testing *************************
-  drawBorder(crtBuffer);
-  drawZoneBorders(crtBuffer, numZones);
+  // drawBorder(crtBuffer);
+  // drawZoneBorders(crtBuffer, numZones);
 
   // draw to the main canvas
   push();
@@ -196,62 +210,62 @@ function draw() {
 }
 
 // draw borders
-function drawBorder(crtBuffer) {
-  const leftBoundary = crtBuffer.width * 0.05; // 10% from the left edge
-  const rightBoundary = crtBuffer.width * 0.95; // 10% from the right edge
-  const topBoundary = crtBuffer.height * 0.05; // 10% from the top edge
-  const bottomBoundary = crtBuffer.height * 0.95; // 10% from the bottom edge
-  const middleX = crtBuffer.width / 2; // Middle of the canvas (x-axis)
+// function drawBorder(crtBuffer) {
+//   const leftBoundary = crtBuffer.width * 0.05; // 10% from the left edge
+//   const rightBoundary = crtBuffer.width * 0.95; // 10% from the right edge
+//   const topBoundary = crtBuffer.height * 0.05; // 10% from the top edge
+//   const bottomBoundary = crtBuffer.height * 0.95; // 10% from the bottom edge
+//   const middleX = crtBuffer.width / 2; // Middle of the canvas (x-axis)
 
-  // left border
-  crtBuffer.stroke(255, 0, 0); // Red border
-  crtBuffer.strokeWeight(2);
-  crtBuffer.noFill();
-  crtBuffer.line(leftBoundary, 0, leftBoundary, crtBuffer.height);
+//   // left border
+//   crtBuffer.stroke(255, 0, 0); // Red border
+//   crtBuffer.strokeWeight(2);
+//   crtBuffer.noFill();
+//   crtBuffer.line(leftBoundary, 0, leftBoundary, crtBuffer.height);
 
-  // right border
-  crtBuffer.line(rightBoundary, 0, rightBoundary, crtBuffer.height);
+//   // right border
+//   crtBuffer.line(rightBoundary, 0, rightBoundary, crtBuffer.height);
 
-  // top border
-  crtBuffer.line(0, topBoundary, crtBuffer.width, topBoundary);
+//   // top border
+//   crtBuffer.line(0, topBoundary, crtBuffer.width, topBoundary);
 
-  // bottom border
-  crtBuffer.line(0, bottomBoundary, crtBuffer.width, bottomBoundary);
+//   // bottom border
+//   crtBuffer.line(0, bottomBoundary, crtBuffer.width, bottomBoundary);
 
-  // middle line
-  crtBuffer.stroke(0, 255, 0); // Green line for the middle (optional color change)
-  crtBuffer.line(middleX, 0, middleX, crtBuffer.height);
-}
+//   // middle line
+//   crtBuffer.stroke(0, 255, 0); // Green line for the middle (optional color change)
+//   crtBuffer.line(middleX, 0, middleX, crtBuffer.height);
+// }
 
 // draw zones
 
-function drawZoneBorders(crtBuffer, numZones) {
-  // boundaries
-  const topBoundary = crtBuffer.height * 0.05;
-  const bottomBoundary = crtBuffer.height * 0.95;
+// function drawZoneBorders(crtBuffer, numZones) {
+//   // boundaries
+//   const topBoundary = crtBuffer.height * 0.05;
+//   const bottomBoundary = crtBuffer.height * 0.95;
 
-  // calculate the width of each zone across the entire canvas
-  const zoneWidth = crtBuffer.width / numZones;
+//   // calculate the width of each zone across the entire canvas
+//   const zoneWidth = crtBuffer.width / numZones;
 
-  // border style
-  crtBuffer.stroke(0, 0, 255); // Blue lines for zones
-  crtBuffer.strokeWeight(2);
+//   // border style
+//   crtBuffer.stroke(0, 0, 255); // Blue lines for zones
+//   crtBuffer.strokeWeight(2);
 
-  // draw vertical lines for each zone across the entire width
-  for (let i = 0; i <= numZones; i++) {
-    const x = i * zoneWidth;
-    crtBuffer.line(x, topBoundary, x, bottomBoundary); // Vertical line for each zone
-  }
+//   // draw vertical lines for each zone across the entire width
+//   for (let i = 0; i <= numZones; i++) {
+//     const x = i * zoneWidth;
+//     crtBuffer.line(x, topBoundary, x, bottomBoundary); // Vertical line for each zone
+//   }
 
-  // labels
-  crtBuffer.fill(255);
-  crtBuffer.noStroke();
-  crtBuffer.textSize(16);
-  for (let i = 0; i < numZones; i++) {
-    const labelX = i * zoneWidth + zoneWidth / 2;
-    crtBuffer.text(`Zone ${i + 1}`, labelX, topBoundary - 10); // Zone labels
-  }
-}
+//   // labels
+//   crtBuffer.fill(255);
+//   crtBuffer.noStroke();
+//   crtBuffer.textSize(8);
+//   for (let i = 0; i < numZones; i++) {
+//     const labelX = i * zoneWidth + zoneWidth / 2;
+//     crtBuffer.text(`Zone ${i + 1}`, labelX, topBoundary - 10); // Zone labels
+//   }
+// }
 
 function drawHand(buffer, landmarks, color) {
   buffer.stroke(color === "blue" ? "blue" : "yellow");
@@ -278,6 +292,14 @@ function drawHand(buffer, landmarks, color) {
   }
 }
 
+let accompanyMode = false; // Tracks if accompany mode is active
+let speedControlMode = false; // Tracks if speed control mode is active
+let arpeggiatorSpeed = 0.5; // Default speed
+let lastToggleTime = 0; // Tracks the last toggle time for debouncing
+let debounceDuration = 300; // 300ms debounce duration
+let speedLocked = false; // Tracks if speed has been locked
+
+// Update chin detection logic
 function drawFace(buffer, landmarks) {
   let centroidX = 0;
   let centroidY = 0;
@@ -289,32 +311,108 @@ function drawFace(buffer, landmarks) {
   centroidX = (centroidX / landmarks.length) * buffer.width;
   centroidY = (centroidY / landmarks.length) * buffer.height;
 
-  // lock and center the face in the middle of canvas
   let offsetX = buffer.width / 2 - centroidX;
   let offsetY = buffer.height / 2 - centroidY;
 
-  // adjust landmarks based on the offset
   const points = landmarks.map((pt) => [
     pt.x * buffer.width + offsetX,
     pt.y * buffer.height + offsetY,
-    pt.z * buffer.width, // Keep Z scaling consistent
+    pt.z * buffer.width,
   ]);
 
-  // individual indices for facial features
-  drawIndices(buffer, faceOutline, points, [255, 255, 255], null, 3);
-  drawIndices(buffer, outerLips, points, [255, 0, 50, 15], [255, 45, 0, 95], 3); // Red lips outline
-  drawIndices(buffer, innerLips, points, [235, 255, 50, 35], null, 2); // Inner lips
-  drawIndices(buffer, leftEye, points, [35, 255, 50, 35], null, 1); // Blue eye
-  drawIndices(buffer, rightEye, points, [35, 255, 50, 35], null, 1); // Blue eye
+  // testing mode switching with chin position --------------------- not working yet
+  const chinPoint = points[152];
+  const noseTip = points[1];
 
-  drawIndices(buffer, leftEyebrow, points, [20, 35, 20, 35], [0, 0, 0], 2); //
-  drawIndices(buffer, rightEyebrow, points, [20, 35, 20, 35], [0, 0, 0], 2); //
-  drawIndices(buffer, noseBridge, points, [175, 175, 175, 35], null, 2); //
-  drawIndices(buffer, nostrils, points, [175, 175, 175, 35], null, 2); //
-  drawIndices(buffer, noseRidge, points, [175, 175, 175, 35], null, 2); //
-  drawIndices(buffer, noseOutline, points, [175, 175, 175, 35], null, 2); //
+  if (chinPoint && noseTip) {
+    const deltaX = chinPoint[0] - noseTip[0];
+    const deltaY = chinPoint[1] - noseTip[1];
+
+    const now = Date.now();
+    const thresholdYAccompany = buffer.height * 0.05; // slight lowering for accompany
+    const thresholdYSpeedControl = buffer.height * 0.1; // deeper lowering for speed control
+    const thresholdXLeft = buffer.width * 0.15; // left zone
+    const thresholdXRight = buffer.width * 0.15; // right zone
+
+    // **toggle accompany mode**
+    if (
+      deltaY > thresholdYAccompany &&
+      deltaY < thresholdYSpeedControl &&
+      now - lastToggleTime > debounceDuration &&
+      !speedControlMode // don't toggle accompany if in speed control mode
+    ) {
+      accompanyMode = !accompanyMode; // toggle accompany mode
+      speedLocked = false; // reset speed lock
+      console.log(accompanyMode ? "accompany mode on" : "accompany mode off");
+      accompanyMode ? enableAccompanyMode() : disableAccompanyMode();
+      lastToggleTime = now; // update debounce timer
+    }
+
+    // **speed control mode**
+    if (
+      accompanyMode &&
+      deltaY > thresholdYSpeedControl &&
+      !speedLocked // only allow speed control if speed isn't locked
+    ) {
+      if (!speedControlMode) {
+        speedControlMode = true; // activate speed control
+        console.log("Speed control mode activated");
+      }
+
+      // map x position to arpeggiator speed
+      const maxSpeed = 10;
+      const minSpeed = 0.5;
+      arpeggiatorSpeed = map(
+        chinPoint[0],
+        noseTip[0] - thresholdXLeft, // furthest left
+        noseTip[0] + thresholdXRight, // furthest right
+        minSpeed,
+        maxSpeed,
+        true
+      );
+
+      console.log(`Arpeggiator speed: ${arpeggiatorSpeed} Hz`);
+      adjustArpeggiatorSpeed(arpeggiatorSpeed);
+    }
+
+    // **lock speed**
+    if (speedControlMode && deltaY < thresholdYSpeedControl) {
+      console.log("Speed locked at", arpeggiatorSpeed, "Hz");
+      speedControlMode = false; // exit speed control mode
+      speedLocked = true; // lock the speed
+    }
+  }
+
+  // drawing the face
+  drawIndices(buffer, faceOutline, points, [255, 255, 255], null, 3);
+  drawIndices(buffer, outerLips, points, [255, 0, 50, 15], [255, 45, 0, 95], 3);
+  drawIndices(buffer, innerLips, points, [235, 255, 50, 35], null, 2);
+  drawIndices(buffer, leftEye, points, [35, 255, 50, 35], null, 1);
+  drawIndices(buffer, rightEye, points, [35, 255, 50, 35], null, 1);
+  drawIndices(buffer, leftEyebrow, points, [20, 35, 20, 35], [0, 0, 0], 2);
+  drawIndices(buffer, rightEyebrow, points, [20, 35, 20, 35], [0, 0, 0], 2);
+  drawIndices(buffer, noseBridge, points, [175, 175, 175, 35], null, 2);
+  drawIndices(buffer, nostrils, points, [175, 175, 175, 35], null, 2);
+  drawIndices(buffer, noseRidge, points, [175, 175, 175, 35], null, 2);
+  drawIndices(buffer, noseOutline, points, [175, 175, 175, 35], null, 2);
 
   faceMasks(buffer, points);
+}
+
+//////////////////////////////////////////// arp adjustments
+// enable accompany mode
+function enableAccompanyMode() {
+  synthRight.set({ arpeggiator: true });
+}
+
+// disable accompany mode
+function disableAccompanyMode() {
+  synthRight.set({ arpeggiator: false });
+}
+
+// adjust arpeggiator speed
+function adjustArpeggiatorSpeed(speed) {
+  synthRight.set({ arpeggioRate: speed });
 }
 
 // saturate and brighten
@@ -454,6 +552,17 @@ const chords = [
 ];
 const numZones = chords.length; // number of zones
 
+const notes = ["A6", "G5", "F5", "E5", "D5", "C5", "B5", "A5"];
+
+let lastZoneIndex = -1; // track the last zone the finger was in
+let lastZoneIndexNote = -1;
+let lastPlayedChord = null; // last played chord
+let isChordPlaying = false; // whether the chord is currently playing
+let currentOrientation = null;
+
+let lastPlayedNote = null;
+let isNotePlaying = false;
+
 // function to check if finger tip is out of bounds
 function isOutOfBounds(landmarks) {
   const handX = landmarks[8].x * width; // index
@@ -477,33 +586,7 @@ function isOutOfBounds(landmarks) {
   return false; // hand is in bounds
 }
 
-let lastZoneIndex = -1; // track the last zone the finger was in
-let lastPlayedChord = null; // last played chord
-let isChordPlaying = false; // whether the chord is currently playing
-let currentOrientation = null;
-
-function isOutOfBounds(landmarks) {
-  const handX = landmarks[8].x * width; // index
-  const handY = landmarks[8].y * height;
-
-  // defined boundary zones
-  const leftBoundary = width * 0.05;
-  const rightBoundary = width * 0.95;
-  const topBoundary = height * 0.05;
-  const bottomBoundary = height * 0.95;
-
-  // check if the hand is out of bounds (left, right, top, or bottom)
-  if (
-    handX < leftBoundary || // left boundary
-    handX > rightBoundary || // right boundary
-    handY < topBoundary || // top boundary
-    handY > bottomBoundary // bottom boundary
-  ) {
-    return true; // hand is out of bounds
-  }
-  return false; // hand is in bounds
-}
-
+// play chords -- left hand
 function playChord(landmarks, orientation) {
   const indexFingertip = landmarks[8]; // index finger coordinate
   const thumbTip = landmarks[4]; // thumb coordinate
@@ -536,7 +619,7 @@ function playChord(landmarks, orientation) {
     );
 
     const strumThreshold = 0.05 * width; // min. pixel distance for playing a note
-    const maxDistance = 0.2 * width; // max. distance for full volume
+    const maxDistance = 0.25 * width; // max. distance for full volume
 
     // map distance to volume (distance = 0 -> mute, distance = large -> loud)
     const mappedVolume = map(
@@ -629,8 +712,6 @@ function playChord(landmarks, orientation) {
             // get the chord for the current zone
             let chord = chords[zoneIndex]; // get the chord for the current zone
 
-            console.log(chord);
-
             // adjust the chord notes based on the octave determined by the Y-position
             chord = chord.map((note) => {
               const baseNote = note.substring(0, note.length - 1);
@@ -688,19 +769,118 @@ function stopArpeggiator() {
   arpeggioPattern.stop(); // stop the Pattern
 }
 
-// play a note with the right hand
+// play notes -- right hand
 function playNote(landmarks, orientation) {
-  const thumb = landmarks[4]; // thumb
-  const indexFinger = landmarks[8]; // index
-  const distance = Math.sqrt(
-    Math.pow(thumb.x - indexFinger.x, 2) + Math.pow(thumb.y - indexFinger.y, 2)
-  );
+  if (landmarks.length > 0) {
+    const indexFingertip = landmarks[8]; // index finger coordinate
+    const thumbTip = landmarks[4]; // thumb coordinate
 
-  // edit distance to determine note duration or other parameters
-  const duration = Math.max(0.3, Math.min(1 / distance, 1));
+    if (indexFingertip && thumbTip) {
+      const fingerX = indexFingertip.x; // finger X normalized to [0, 1]
+      const fingerY = indexFingertip.y; // finger Y normalized to [0, 1]
 
-  // trigger a note with the right-hand synth
-  const scaleRight = ["A6", "B6", "C6", "D6", "E6", "F6", "G6", "A7"]; // random scale --- change later
-  const note = scaleRight[Math.floor(Math.random() * scaleRight.length)];
-  synthRight.triggerAttackRelease(note, duration);
+      const thumbX = thumbTip.x; // thumb X normalized to [0, 1]
+      const thumbY = thumbTip.y; // thumb Y normalized to [0, 1]
+
+      // check if the finger is out of bounds
+      if (isOutOfBounds(landmarks)) {
+        // If the finger is out of bounds, release all notes and stop the chord
+        if (lastPlayedNote) {
+          synthRight.triggerRelease(); // stop the chord
+          lastPlayedChord = null; // reset last played chord
+          lastZoneIndexNote = -1; // reset zone index
+        }
+        return; // exit early to prevent playing
+      }
+
+      // calculate the distance between index finger and thumb
+      const distance = dist(
+        fingerX * width,
+        fingerY * height,
+        thumbX * width,
+        thumbY * height
+      );
+
+      const strumThreshold = 0.05 * width; // min. pixel distance for playing a note
+      const maxDistance = 0.3 * width; // max. distance for full volume
+
+      // map distance to volume (distance = 0 -> mute, distance = large -> loud)
+      const mappedVolume = map(
+        distance,
+        strumThreshold,
+        maxDistance,
+        -60,
+        0,
+        true
+      );
+      synthRight.volume.value = mappedVolume;
+
+      // distance threshold check
+      if (distance > strumThreshold) {
+        // Calculate the zone index for the entire canvas
+        const zoneIndexNote = Math.floor(
+          map(
+            fingerX * width, // finger's absolute X position
+            0, // start from the left boundary
+            width, // end at the right boundary
+            0,
+            numZones // map to the number of zones
+          )
+        );
+
+        // if the zone has changed, release the previous note and play the new one
+        if (zoneIndexNote !== lastZoneIndexNote) {
+          if (lastZoneIndexNote !== -1) {
+            synthRight.triggerRelease(); // stop previous note
+          }
+          lastZoneIndexNote = zoneIndexNote; // update the last zone index
+
+          // map the Y-position of the index finger to an octave range
+          const fingerOctave = Math.floor(
+            map(fingerY * height, height, 0, 0, 2) // invert the mapping: higher Y -> higher octaves
+          );
+
+          // get the note for the current zone
+          if (zoneIndexNote >= 0 && zoneIndexNote < numZones) {
+            let note = notes[zoneIndexNote]; // Get the note for the current zone
+
+            // adjust the note based on the octave determined by y-position
+            const baseNote = note.substring(0, note.length - 1); // gets the note
+            const baseOctave = parseInt(note[note.length - 1]); // gets the octave
+            const octaveAdjustment = -1; // adjustment for reversed orientation
+            if (orientation === false) {
+              note = `${baseNote}${
+                baseOctave + fingerOctave + octaveAdjustment
+              }`; // adjust the octave based on finger position for reversed orientation
+            } else {
+              note = `${baseNote}${baseOctave + fingerOctave}`; // adjust the octave based on finger position
+            }
+
+            // if the current note is different from the last one, play the new note
+            if (note !== lastPlayedNote) {
+              synthRight.triggerAttack(note); // play the new note
+              lastPlayedNote = note; // update the last played note
+            }
+          }
+        }
+      } else {
+        // if strum distance is below the threshold, release the current note
+        if (lastPlayedNote) {
+          synthRight.triggerRelease(); // stop note
+          lastPlayedNote = null; // reset lastPlayedNote
+          lastZoneIndexNote = -1; // reset zone
+        }
+      }
+    }
+  }
+}
+
+// clean up notes if there are no hands in frame
+function noteClear() {
+  synthLeft.releaseAll();
+  stopArpeggiator();
+  synthRight.triggerRelease();
+  lastPlayedNote = null; // reset last played notes if necessary
+  lastPlayedChord = null;
+  lastZoneIndex = -1; // reset zones
 }
